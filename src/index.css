@@ -83,11 +83,6 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--line); border-radius: 12px; overflow-y: auto; background: var(--surface);
 }
 .scroller--grid { height: 440px; }
-.scroller__loading {
-  display: flex; align-items: center; justify-content: center;
-  height: 100%; padding: 0 16px; text-align: center;
-  color: var(--muted); font-size: 13px; line-height: 1.6;
-}
 .row {
   display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid #eef1f6;
   font-size: 14px; color: var(--ink);

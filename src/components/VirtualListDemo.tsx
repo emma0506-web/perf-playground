@@ -4,24 +4,25 @@ import { useFps } from '../perf/useFps'
 const ITEM_HEIGHT = 40
 const VIEWPORT_HEIGHT = 420
 /**
- * 全量渲染实际渲染条数上限：核心取舍点。
- * - 过高（如 10 万）：一次性挂载即冻结主线程，滚动更是浏览器原生死扛 10 万节点 → “真卡死”，失去对比演示意义。
- * - 取 1 万：DOM 节点数仍是虚拟模式（约 15 个）的 ~660 倍，对比足够强烈；挂载耗时约 100ms 量级，
- *   配合“延迟挂载”后点击手感瞬时，既能体现“全量渲染很重”，又不冻页面、可交互。
+ * 全量渲染实际渲染条数上限。
+ * 1 万节点相对虚拟模式（约 15 个）仍是 ~660 倍对比，足以说明问题；
+ * 配合“分帧渐进挂载”，点击不再卡顿，滚动时的 FPS 下跌才是要演示的效果。
  */
 const MAX_NORMAL = 10000
+/** 每帧挂载的节点数：足够小，保证单帧耗时仅几毫秒，绝不冻结主线程 */
+const CHUNK = 1000
 
 /**
  * 虚拟滚动 vs 全量渲染 对比实验
- * - 全量渲染：一次性创建 N 个 DOM 节点，滚动时浏览器需布局/绘制全部节点 → FPS 暴跌、DOM 数爆炸
+ * - 全量渲染：创建 N 个 DOM 节点，滚动时浏览器需布局/绘制全部节点 → FPS 暴跌、DOM 数爆炸
  * - 虚拟滚动：仅渲染可视区域 + 缓冲区的少量节点，用占位撑开总高度，滚动时复用节点 → 节点数恒定、流畅
  */
 export default function VirtualListDemo() {
   const [mode, setMode] = useState<'virtual' | 'normal'>('virtual')
   const [count, setCount] = useState(100000)
   const [scrollTop, setScrollTop] = useState(0)
-  // 延迟挂载标志：全量模式点击后先显示占位，下一帧再挂载节点，避免挂载阻塞点击手感
-  const [normalReady, setNormalReady] = useState(false)
+  // 已挂载的全量行数：通过 rAF 逐帧增长，把 N 个节点的挂载成本摊薄到多帧，避免单帧冻结
+  const [mounted, setMounted] = useState(0)
   const { fps, jank } = useFps(true)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -42,21 +43,6 @@ export default function VirtualListDemo() {
     return arr
   }, [mode, scrollTop, count])
 
-  // 关键优化：全量列表的元素数组用 useMemo 固定引用。
-  // FPS 徽章每秒 setState 会触发本组件重渲染，若每次都重建 10 万个元素并 diff，
-  // 页面会被周期性冻住；引用不变时 React 会跳过这些子树，不产生任何 diff 开销。
-  const normalRows = useMemo(
-    () =>
-      mode !== 'normal'
-        ? []
-        : Array.from({ length: renderCount }, (_, i) => (
-            <div className="row" style={{ height: ITEM_HEIGHT }} key={i}>
-              <span className="row__idx">#{i}</span> 全量渲染条目
-            </div>
-          )),
-    [mode, renderCount]
-  )
-
   const totalHeight = count * ITEM_HEIGHT
 
   const switchMode = (next: 'virtual' | 'normal') => {
@@ -66,16 +52,23 @@ export default function VirtualListDemo() {
     if (containerRef.current) containerRef.current.scrollTop = 0
   }
 
-  // 延迟挂载：进入全量模式后，等当前帧绘制完成（先渲染占位提示）再挂载 N 个节点，
-  // 这样点击“全量渲染”的反馈是瞬时的，节点在下一帧才出现，不阻塞交互。
+  // 分帧渐进挂载：进入全量模式后，每帧只挂载 CHUNK 个节点，
+  // 直到达到 renderCount。这样点击“全量渲染”后列表平滑铺满，全程无单帧卡顿。
   useEffect(() => {
-    if (mode === 'normal') {
-      setNormalReady(false)
-      const id = requestAnimationFrame(() => setNormalReady(true))
-      return () => cancelAnimationFrame(id)
+    if (mode !== 'normal') {
+      setMounted(0)
+      return
     }
-    setNormalReady(false)
-  }, [mode])
+    let cursor = 0
+    let raf = 0
+    const tick = () => {
+      cursor = Math.min(renderCount, cursor + CHUNK)
+      setMounted(cursor)
+      if (cursor < renderCount) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [mode, renderCount])
 
   return (
     <section className="panel">
@@ -127,11 +120,13 @@ export default function VirtualListDemo() {
         }}
       >
         {mode === 'normal' ? (
-          normalReady ? (
-            <div>{normalRows}</div>
-          ) : (
-            <div className="scroller__loading">正在渲染 {renderCount.toLocaleString()} 行（全量模式，节点越多越能体现与虚拟滚动的差距）…</div>
-          )
+          <div>
+            {Array.from({ length: mounted }, (_, i) => (
+              <div className="row" style={{ height: ITEM_HEIGHT }} key={i}>
+                <span className="row__idx">#{i}</span> 全量渲染条目
+              </div>
+            ))}
+          </div>
         ) : (
           <div style={{ height: totalHeight, position: 'relative' }}>
             {slice.map((i) => (
