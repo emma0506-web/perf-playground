@@ -3,8 +3,13 @@ import { useFps } from '../perf/useFps'
 
 const ITEM_HEIGHT = 40
 const VIEWPORT_HEIGHT = 420
-/** 全量渲染为保护浏览器设上限：50 万节点一次性创建会冻结主线程数十秒，失去演示意义 */
-const MAX_NORMAL = 100000
+/**
+ * 全量渲染实际渲染条数上限：核心取舍点。
+ * - 过高（如 10 万）：一次性挂载即冻结主线程，滚动更是浏览器原生死扛 10 万节点 → “真卡死”，失去对比演示意义。
+ * - 取 1.5 万：DOM 节点数仍是虚拟模式（约 15 个）的 ~1000 倍，FPS 在快速滚动时明显跌破 60，
+ *   既直观体现“全量渲染很重”，又不冻结页面，保证 demo 可交互。
+ */
+const MAX_NORMAL = 15000
 
 /**
  * 虚拟滚动 vs 全量渲染 对比实验
@@ -128,7 +133,7 @@ export default function VirtualListDemo() {
         切换「全量渲染」并快速滚动，观察 DOM 节点数暴涨、FPS 明显下降；切回「虚拟滚动」后节点数恒定、滚动如丝。
         这正是长列表性能优化的核心手段。
         {mode === 'normal' && count > MAX_NORMAL && (
-          <>（全量模式为保护浏览器最多渲染 {MAX_NORMAL.toLocaleString()} 条，「50 万」仅在虚拟模式下展示占位高度）</>
+          <>（全量模式为保护浏览器最多渲染 {MAX_NORMAL.toLocaleString()} 条，「50 万」仅在虚拟模式下展示占位高度——这 1.5 万节点已足以让 FPS 明显下跌、DOM 数暴涨 ~1000 倍）</>
         )}
       </p>
     </section>
