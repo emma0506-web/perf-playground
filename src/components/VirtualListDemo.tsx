@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFps } from '../perf/useFps'
 
 const ITEM_HEIGHT = 40
@@ -6,10 +6,10 @@ const VIEWPORT_HEIGHT = 420
 /**
  * 全量渲染实际渲染条数上限：核心取舍点。
  * - 过高（如 10 万）：一次性挂载即冻结主线程，滚动更是浏览器原生死扛 10 万节点 → “真卡死”，失去对比演示意义。
- * - 取 1.5 万：DOM 节点数仍是虚拟模式（约 15 个）的 ~1000 倍，FPS 在快速滚动时明显跌破 60，
- *   既直观体现“全量渲染很重”，又不冻结页面，保证 demo 可交互。
+ * - 取 1 万：DOM 节点数仍是虚拟模式（约 15 个）的 ~660 倍，对比足够强烈；挂载耗时约 100ms 量级，
+ *   配合“延迟挂载”后点击手感瞬时，既能体现“全量渲染很重”，又不冻页面、可交互。
  */
-const MAX_NORMAL = 15000
+const MAX_NORMAL = 10000
 
 /**
  * 虚拟滚动 vs 全量渲染 对比实验
@@ -20,6 +20,8 @@ export default function VirtualListDemo() {
   const [mode, setMode] = useState<'virtual' | 'normal'>('virtual')
   const [count, setCount] = useState(100000)
   const [scrollTop, setScrollTop] = useState(0)
+  // 延迟挂载标志：全量模式点击后先显示占位，下一帧再挂载节点，避免挂载阻塞点击手感
+  const [normalReady, setNormalReady] = useState(false)
   const { fps, jank } = useFps(true)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -63,6 +65,17 @@ export default function VirtualListDemo() {
     setScrollTop(0)
     if (containerRef.current) containerRef.current.scrollTop = 0
   }
+
+  // 延迟挂载：进入全量模式后，等当前帧绘制完成（先渲染占位提示）再挂载 N 个节点，
+  // 这样点击“全量渲染”的反馈是瞬时的，节点在下一帧才出现，不阻塞交互。
+  useEffect(() => {
+    if (mode === 'normal') {
+      setNormalReady(false)
+      const id = requestAnimationFrame(() => setNormalReady(true))
+      return () => cancelAnimationFrame(id)
+    }
+    setNormalReady(false)
+  }, [mode])
 
   return (
     <section className="panel">
@@ -114,7 +127,11 @@ export default function VirtualListDemo() {
         }}
       >
         {mode === 'normal' ? (
-          <div>{normalRows}</div>
+          normalReady ? (
+            <div>{normalRows}</div>
+          ) : (
+            <div className="scroller__loading">正在渲染 {renderCount.toLocaleString()} 行（全量模式，节点越多越能体现与虚拟滚动的差距）…</div>
+          )
         ) : (
           <div style={{ height: totalHeight, position: 'relative' }}>
             {slice.map((i) => (
@@ -133,7 +150,7 @@ export default function VirtualListDemo() {
         切换「全量渲染」并快速滚动，观察 DOM 节点数暴涨、FPS 明显下降；切回「虚拟滚动」后节点数恒定、滚动如丝。
         这正是长列表性能优化的核心手段。
         {mode === 'normal' && count > MAX_NORMAL && (
-          <>（全量模式为保护浏览器最多渲染 {MAX_NORMAL.toLocaleString()} 条，「50 万」仅在虚拟模式下展示占位高度——这 1.5 万节点已足以让 FPS 明显下跌、DOM 数暴涨 ~1000 倍）</>
+          <>（全量模式为保护浏览器最多渲染 {MAX_NORMAL.toLocaleString()} 条，「50 万」仅在虚拟模式下展示占位高度——这 1 万节点已足以让 FPS 明显下跌、DOM 数暴涨 ~660 倍）</>
         )}
       </p>
     </section>
