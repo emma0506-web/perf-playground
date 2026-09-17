@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useFps } from '../perf/useFps'
 
 const WAIT = 300
 
@@ -13,6 +14,9 @@ export default function DebounceThrottleDemo() {
   const [raw, setRaw] = useState(0)
   const [debounced, setDebounced] = useState(0)
   const [throttled, setThrottled] = useState(0)
+
+  // 实时帧率自测：无论怎么狂敲键盘，本面板都应稳定在 ~60 FPS
+  const { fps, jank } = useFps(true)
 
   const debTimer = useRef<number | undefined>(undefined)
   const lastThrottle = useRef(0)
@@ -39,6 +43,9 @@ export default function DebounceThrottleDemo() {
     <section className="panel">
       <div className="panel__head">
         <h3>② 防抖 vs 节流 · Debounce / Throttle</h3>
+        <span className={`badge ${fps >= 50 ? 'badge--ok' : fps >= 30 ? 'badge--warn' : 'badge--bad'}`}>
+          {fps} FPS · 掉帧 {jank}
+        </span>
         <span className="badge badge--info">窗口 {WAIT}ms</span>
       </div>
 

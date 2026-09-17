@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useFps } from '../perf/useFps'
 
 const TOTAL = 300
 
@@ -16,6 +17,8 @@ function gradient(i: number): string {
 export default function LazyImageDemo() {
   const [lazy, setLazy] = useState(true)
   const [loaded, setLoaded] = useState<Set<number>>(new Set())
+  // 实时帧率自测：懒加载/全量切换、滚动加载都应稳定在 ~60 FPS
+  const { fps, jank } = useFps(true)
   const scrollRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const timers = useRef<Record<number, number>>({})
@@ -70,6 +73,9 @@ export default function LazyImageDemo() {
     <section className="panel">
       <div className="panel__head">
         <h3>③ 图片懒加载 · Lazy Loading</h3>
+        <span className={`badge ${fps >= 50 ? 'badge--ok' : fps >= 30 ? 'badge--warn' : 'badge--bad'}`}>
+          {fps} FPS · 掉帧 {jank}
+        </span>
         <span className={`badge ${lazy ? 'badge--ok' : 'badge--bad'}`}>已加载 {loaded.size} / {TOTAL}</span>
       </div>
 
