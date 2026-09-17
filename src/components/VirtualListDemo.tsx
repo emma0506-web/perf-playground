@@ -3,6 +3,8 @@ import { useFps } from '../perf/useFps'
 
 const ITEM_HEIGHT = 40
 const VIEWPORT_HEIGHT = 420
+/** 全量渲染为保护浏览器设上限：50 万节点一次性创建会冻结主线程数十秒，失去演示意义 */
+const MAX_NORMAL = 100000
 
 /**
  * 虚拟滚动 vs 全量渲染 对比实验
@@ -19,7 +21,10 @@ export default function VirtualListDemo() {
   const buffer = 4
   const visibleCount = Math.ceil(VIEWPORT_HEIGHT / ITEM_HEIGHT) + buffer
 
-  const domCount = mode === 'virtual' ? Math.min(count, visibleCount) : count
+  // 全量模式下限制实际渲染条数，避免一次性创建过多节点长时间冻结页面
+  const renderCount = mode === 'normal' ? Math.min(count, MAX_NORMAL) : count
+
+  const domCount = mode === 'virtual' ? Math.min(count, visibleCount) : renderCount
 
   const slice = useMemo(() => {
     if (mode !== 'virtual') return []
@@ -30,7 +35,29 @@ export default function VirtualListDemo() {
     return arr
   }, [mode, scrollTop, count])
 
+  // 关键优化：全量列表的元素数组用 useMemo 固定引用。
+  // FPS 徽章每秒 setState 会触发本组件重渲染，若每次都重建 10 万个元素并 diff，
+  // 页面会被周期性冻住；引用不变时 React 会跳过这些子树，不产生任何 diff 开销。
+  const normalRows = useMemo(
+    () =>
+      mode !== 'normal'
+        ? []
+        : Array.from({ length: renderCount }, (_, i) => (
+            <div className="row" style={{ height: ITEM_HEIGHT }} key={i}>
+              <span className="row__idx">#{i}</span> 全量渲染条目
+            </div>
+          )),
+    [mode, renderCount]
+  )
+
   const totalHeight = count * ITEM_HEIGHT
+
+  const switchMode = (next: 'virtual' | 'normal') => {
+    setMode(next)
+    // 切换模式时回到列表顶部，保证两种模式从同一起点对比
+    setScrollTop(0)
+    if (containerRef.current) containerRef.current.scrollTop = 0
+  }
 
   return (
     <section className="panel">
@@ -43,10 +70,10 @@ export default function VirtualListDemo() {
 
       <div className="controls">
         <div className="seg">
-          <button className={mode === 'virtual' ? 'seg__btn is-active' : 'seg__btn'} onClick={() => setMode('virtual')}>
+          <button className={mode === 'virtual' ? 'seg__btn is-active' : 'seg__btn'} onClick={() => switchMode('virtual')}>
             虚拟滚动
           </button>
-          <button className={mode === 'normal' ? 'seg__btn is-active' : 'seg__btn'} onClick={() => setMode('normal')}>
+          <button className={mode === 'normal' ? 'seg__btn is-active' : 'seg__btn'} onClick={() => switchMode('normal')}>
             全量渲染
           </button>
         </div>
@@ -75,16 +102,14 @@ export default function VirtualListDemo() {
         className="scroller"
         ref={containerRef}
         style={{ height: VIEWPORT_HEIGHT }}
-        onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
+        onScroll={(e) => {
+          // 只在虚拟模式下记录滚动位置：全量模式由浏览器原生滚动，
+          // 若在此 setState 会导致每次滚动都重渲染（历史上正是页面冻结的根因）
+          if (mode === 'virtual') setScrollTop((e.target as HTMLDivElement).scrollTop)
+        }}
       >
         {mode === 'normal' ? (
-          <div>
-            {Array.from({ length: count }, (_, i) => (
-              <div className="row" style={{ height: ITEM_HEIGHT }} key={i}>
-                <span className="row__idx">#{i}</span> 全量渲染条目
-              </div>
-            ))}
-          </div>
+          <div>{normalRows}</div>
         ) : (
           <div style={{ height: totalHeight, position: 'relative' }}>
             {slice.map((i) => (
@@ -100,8 +125,11 @@ export default function VirtualListDemo() {
         )}
       </div>
       <p className="hint">
-        切换「全量渲染」并快速滚动，观察 DOM 节点数暴涨到 {count.toLocaleString()}、FPS 直线下降；
-        切回「虚拟滚动」后节点数恒定、滚动如丝。这正是长列表性能优化的核心手段。
+        切换「全量渲染」并快速滚动，观察 DOM 节点数暴涨、FPS 明显下降；切回「虚拟滚动」后节点数恒定、滚动如丝。
+        这正是长列表性能优化的核心手段。
+        {mode === 'normal' && count > MAX_NORMAL && (
+          <>（全量模式为保护浏览器最多渲染 {MAX_NORMAL.toLocaleString()} 条，「50 万」仅在虚拟模式下展示占位高度）</>
+        )}
       </p>
     </section>
   )
