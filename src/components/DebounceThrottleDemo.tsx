@@ -49,12 +49,15 @@ export default function DebounceThrottleDemo() {
         <span className="badge badge--info">窗口 {WAIT}ms</span>
       </div>
 
-      <input
-        className="text-input"
-        placeholder="在这里快速连续输入，观察三种计数差异…"
-        value={text}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <label className="field">
+        <input
+          className="text-input"
+          aria-label="输入测试文本"
+          placeholder="在这里快速连续输入，观察三种计数差异…"
+          value={text}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </label>
 
       <div className="counters">
         <div className="counter">
