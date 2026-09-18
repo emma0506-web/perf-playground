@@ -31,5 +31,6 @@ export default function App() {
         <p>perf-playground · React + TypeScript + Vite 构建 · 零后端依赖，纯前端性能实验</p>
       </footer>
     </div>
+    </>
   )
 }
