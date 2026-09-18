@@ -4,8 +4,10 @@ import LazyImageDemo from './components/LazyImageDemo'
 
 export default function App() {
   return (
-    <div className="app">
-      <header className="hero">
+    <>
+      <a href="#main" className="skip-link">跳到主内容</a>
+      <div className="app">
+        <header className="hero">
         <div className="hero__inner">
           <p className="hero__eyebrow">FRONTEND PERFORMANCE LAB</p>
           <h1 className="hero__title">perf-playground</h1>
@@ -19,7 +21,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="main">
+      <main id="main" className="main">
         <VirtualListDemo />
         <DebounceThrottleDemo />
         <LazyImageDemo />
